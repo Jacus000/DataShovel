@@ -60,7 +60,7 @@ Data Shovel to uniwersalne narzędzie desktopowe stworzone w PyQt6, które pozwa
     python main.py
     ```
 
-## Użycie
+## Przykładowe użycie
 - Otwórz plik z danymi (CSV lub Excel) poprzez menu File → Open
 
 - Przeglądaj dane w zakładce "Data"
