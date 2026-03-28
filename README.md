@@ -24,7 +24,7 @@ Data Shovel to uniwersalne narzędzie desktopowe stworzone w PyQt6, które pozwa
 
 1. Sklonuj repozytorium:
    ```bash
-   git clone https://github.com/Jacus000/Projekt-Programowanie-2025.git
+   git clone https://github.com/Jacus000/DataShovel.git
    cd Projekt-Programowanie-2025
    ```
 2. Stwórz środowisko i zainstaluj wymagane pakiety:
