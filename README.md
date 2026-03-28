@@ -81,11 +81,11 @@ Simply browse and load your dataset to get started.
  Filtering & Searching
 Narrow down your data with powerful search and filter tools.
 <img width="1915" height="1015" alt="image" src="https://github.com/user-attachments/assets/54d491a2-c000-43e2-8617-c6f91961ffca" />
-1) Chose which columns you want to have in your view right now
-2) Search for a value in given value. It automatically shows results containg given string to improve general and precise search
-3) Drop columns that you dont find useless
-4) Advanced filters that automatically match column datatypes allowing you to quickly narrow down or find hidden informations in large datasets
-5) Results are being displayed simaultionusaly while applying filters
+1) Column Visibility: Choose which columns to display in your current view.
+2) Live Search: Search for specific values; results update instantly to allow for both general and precise searches.
+3) Column Management: Drop unnecessary columns to declutter your dataset.
+4) Advanced Filters: Automatically matches data types (numeric/categorical) to quickly find hidden information in large datasets.
+5) Real-time Results: Results are displayed simultaneously as you apply filters.
 
  Data Cleaning & Manipulation
 Prepare your data for analysis with just a few clicks.
