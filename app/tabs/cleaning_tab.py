@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QStackedWidget, QTableView, QLineEdit,
     QComboBox, QCheckBox, QRadioButton, QButtonGroup,
-    QDoubleSpinBox, QTableWidget, QSplitter, QFormLayout
+    QDoubleSpinBox, QTableWidget, QSplitter, QFormLayout, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from app.models.pandas_model import PandasModel
@@ -39,7 +39,8 @@ class DataCleaningTab(QWidget):
             "Manage Missing Values",
             "Remove Duplicates",
             "Change Data Type",
-            "Clean Text"
+            "Clean Text",
+            "Encoding (Label / 1,2,3...)"
         ])
         left_layout.addWidget(self.operation_list)
         
@@ -76,6 +77,7 @@ class DataCleaningTab(QWidget):
         self.remove_dup_btn.clicked.connect(self.remove_duplicates)
         self.convert_btn.clicked.connect(self.change_dtype)
         self.clean_text_btn.clicked.connect(self.clean_text)
+        self.encode_btn.clicked.connect(self.encode_labels)
 
     def create_operation_panels(self):
         """Initialize all operation panels"""
@@ -83,6 +85,7 @@ class DataCleaningTab(QWidget):
         self.operation_stack.addWidget(self.create_duplicates_panel())
         self.operation_stack.addWidget(self.create_dtype_panel())
         self.operation_stack.addWidget(self.create_text_clean_panel())
+        self.operation_stack.addWidget(self.create_encoding_panel())
 
     def create_missing_values_panel(self):
         """Panel for handling missing values"""
@@ -111,7 +114,7 @@ class DataCleaningTab(QWidget):
         layout.addWidget(self.missing_column_cb)
         
         self.fill_method_cb = QComboBox()
-        self.fill_method_cb.addItems(["Mean", "Median", "Mode", "Constant Value", "Forward Fill", "Backward Fill"])
+        self.fill_method_cb.addItems(["Mean", "Median", "Mode", "Constant Value / String", "Forward Fill", "Backward Fill"])
         layout.addWidget(QLabel("Fill method:"))
         layout.addWidget(self.fill_method_cb)
         
@@ -194,6 +197,19 @@ class DataCleaningTab(QWidget):
         layout.addWidget(self.clean_text_btn)
         return panel
 
+    def create_encoding_panel(self):
+        """Panel for label encoding"""
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        self.encode_column = QComboBox()
+        layout.addWidget(QLabel("Text/Categorical column:"))
+        layout.addWidget(self.encode_column)
+        
+        self.encode_btn = QPushButton("Encode to numbers (1, 2, 3...)")
+        layout.addWidget(self.encode_btn)
+        layout.addStretch()
+        return panel
+
     def set_data(self, df: pd.DataFrame):
         """Set the data to be cleaned"""
         self.df_original = df.copy()
@@ -207,6 +223,7 @@ class DataCleaningTab(QWidget):
         self.update_duplicates_panel()
         self.update_dtype_panel()
         self.update_text_clean_panel()
+        self.update_encoding_panel()
         
     def update_table_view(self):
         """Update the table view with current data"""
@@ -256,7 +273,18 @@ class DataCleaningTab(QWidget):
         self.text_column.clear()
         self.text_column.addItems(
             col for col in self.df_cleaned.columns 
-            if pd.api.types.is_string_dtype(self.df_cleaned[col])
+            if pd.api.types.is_string_dtype(self.df_cleaned[col]) or pd.api.types.is_object_dtype(self.df_cleaned[col])
+        )
+
+    def update_encoding_panel(self):
+        """Update encoding panel with categorical or string data"""
+        if self.df_cleaned is None: return
+        self.encode_column.clear()
+        self.encode_column.addItems(
+            col for col in self.df_cleaned.columns 
+            if pd.api.types.is_object_dtype(self.df_cleaned[col]) or 
+               pd.api.types.is_string_dtype(self.df_cleaned[col]) or 
+               isinstance(self.df_cleaned[col].dtype, pd.CategoricalDtype)
         )
 
     def fill_missing_values(self):
@@ -270,25 +298,31 @@ class DataCleaningTab(QWidget):
             return
             
         value = None
-        if method == "Mean":
-            value = self.df_cleaned[col].mean()
-        elif method == "Median":
-            value = self.df_cleaned[col].median()
-        elif method == "Mode":
-            value = self.df_cleaned[col].mode().iloc[0] if not self.df_cleaned[col].mode().empty else None
-        elif method == "Constant Value":
-            value = self.custom_value.text()
-            try:
-                value = eval(value)
-            except:
-                pass
-        elif method == "Forward Fill":
-            self.df_cleaned[col] = self.df_cleaned[col].fillna(method='ffill')
-            self.update_ui()
-            return
-        elif method == "Backward Fill":
-            self.df_cleaned[col] = self.df_cleaned[col].fillna(method='bfill')
-            self.update_ui()
+        try:
+            if method == "Mean":
+                value = self.df_cleaned[col].mean()
+            elif method == "Median":
+                value = self.df_cleaned[col].median()#wartosc srodkowa
+            elif method == "Mode":
+                value = self.df_cleaned[col].mode().iloc[0] if not self.df_cleaned[col].mode().empty else None#najczestsza wartosc
+            elif method == "Constant Value":
+                value = self.custom_value.text()
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass # treat as string
+            elif method == "Forward Fill":
+                self.df_cleaned[col] = self.df_cleaned[col].fillna(method='ffill')
+                self.update_ui()
+                return
+            elif method == "Backward Fill":
+                self.df_cleaned[col] = self.df_cleaned[col].fillna(method='bfill')
+                self.update_ui()
+                return
+        except (TypeError, ValueError) as e:
+            QMessageBox.warning(self, "Data Cleaning Error", 
+                                f"Cannot perform '{method}' on column '{col}'.\n\n"
+                                "This typically happens when trying to use mathematical operations (like Mean or Median) on a text column.")
             return
             
         if value is not None:
@@ -336,8 +370,10 @@ class DataCleaningTab(QWidget):
             else:
                 self.df_cleaned[col] = self.df_cleaned[col].astype(target_type)
             self.update_ui()
-        except Exception:
-            pass
+        except Exception as e:
+            QMessageBox.warning(self, "Conversion Failed",
+                                f"Could not convert column '{col}' to '{target_type}'.\n\n"
+                                "Some values in this column are not compatible with the selected type.")
 
     def clean_text(self):
         if self.df_cleaned is None:
@@ -353,6 +389,20 @@ class DataCleaningTab(QWidget):
         if self.remove_special.isChecked():
             series = series.str.replace(r'[^a-zA-Z0-9\s]', '', regex=True)
         self.df_cleaned[col] = series
+        self.update_ui()
+
+    def encode_labels(self):
+        """Encodes text categories into numerical labels (1, 2, 3...)"""
+        if self.df_cleaned is None:
+            return
+        col = self.encode_column.currentText()
+        if not col:
+            return
+            
+        unique_vals = self.df_cleaned[col].dropna().unique()
+        mapping = {val: i + 1 for i, val in enumerate(unique_vals)}
+        
+        self.df_cleaned[col] = self.df_cleaned[col].map(mapping)
         self.update_ui()
 
     def apply_changes(self):
