@@ -147,5 +147,5 @@ class PlotGenerator:
             return fig
 
         except Exception as e:
-            print(f"Error generating plot: {e}")
-            return None
+            # Raise the exception so it can be shown to the user in the UI
+            raise ValueError(f"Failed to generate {plttype} plot: {str(e)}")

@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
 
         # Connect signals
         self.side_panel.filter_widget.filters_applied.connect(self.apply_filters)
+        self.data_tab.column_dropped.connect(self.drop_column_from_data)
         self.side_panel.plot_widget.plot_requested.connect(self.generate_plot)
         self.cleaning_tab.cleaning_applied.connect(self.update_after_cleaning)
 
@@ -173,6 +174,19 @@ class MainWindow(QMainWindow):
         self.data_tab.update_data(filtered_data)
         self.status_bar.showMessage(f"Filtered data: {len(filtered_data)} rows", 3000)
 
+    def drop_column_from_data(self, column_name):
+        """Drops a column from the entire application dataset"""
+        if self.current_data is None or column_name not in self.current_data.columns:
+            return
+            
+        self.current_data = self.current_data.drop(columns=[column_name])
+        
+        if self.filtered_data is not None and column_name in self.filtered_data.columns:
+            self.filtered_data = self.filtered_data.drop(columns=[column_name])
+            
+        self.update_ui_with_data()
+        self.status_bar.showMessage(f"Dropped column: {column_name}", 3000)
+
     def generate_plot(self, plot_params):
         """Generate plot based on parameters"""
         if self.filtered_data is None or self.filtered_data.empty:
@@ -190,8 +204,10 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Warning", "Failed to generate plot")
 
+        except ValueError as e:
+            QMessageBox.warning(self, "Plot Configuration Error", str(e))
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to generate plot:\n{str(e)}")
+            QMessageBox.critical(self, "Unexpected Error", f"An unexpected error occurred while generating the plot:\n{str(e)}")
 
     def show_about(self):
         QMessageBox.about(self, "About",

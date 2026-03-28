@@ -211,7 +211,7 @@ class RegressionDashboard(QWidget):
             model.fit(X_scaled, y_clean)  # trening
             score = model.score(X_scaled, y_clean)
             y_pred = model.predict(X_scaled)
-            rmse = mean_squared_error(y_clean, y_pred, squared=False)
+            rmse = np.sqrt(mean_squared_error(y_clean, y_pred))
 
             # Wyswietlenie wspolczynnikow
             html = f"<b>R² Score:</b> {score:.4f}<br>"
@@ -271,7 +271,7 @@ class RegressionDashboard(QWidget):
             for edit in self.predict_inputs:
                 val = float(edit.text())
                 values.append(val)
-            X = np.array(values).reshape(1, -1)
+            X = np.array(values).reshape(1, -1)#przeksztalca values w macierz 1,liczba cech potrzebna do scikit-learn
             X_scaled = self._trained_scaler.transform(X)
             y_pred = self._trained_model.predict(X_scaled)
             self.predict_result.setText(f"Predicted {self._trained_y_column}: {y_pred[0]:.4f}")
@@ -281,7 +281,7 @@ class RegressionDashboard(QWidget):
     # Rysowanie linii regresji (dla 1 zmiennej)
     def plot_regression_line(self, X_clean, y_clean, model, scaler, x_col, y_col):
         x_vals = X_clean[x_col + '_X'].values
-        x_range = np.linspace(x_vals.min(), x_vals.max(), 100)
+        x_range = np.linspace(x_vals.min(), x_vals.max(), 100) #tworzy 100 punktow w zakresie wartosci x
         X_pred = np.zeros((100, X_clean.shape[1]))
         X_pred[:, 0] = x_range
         X_pred_scaled = scaler.transform(X_pred)

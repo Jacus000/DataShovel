@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QFrame, QVBoxLayout, QLabel, QPushButton,
-                             QHBoxLayout, QLineEdit, QComboBox, QGroupBox, QWidget)
+                             QHBoxLayout, QLineEdit, QComboBox, QGroupBox, QWidget, QScrollArea, QListWidget, QListWidgetItem)
 from PyQt6.QtCore import pyqtSignal, Qt
 import pandas as pd
 import seaborn as sns
@@ -23,7 +23,6 @@ class SidePanel(QFrame):
 
         self.layout.addWidget(self.filter_widget)
         self.layout.addWidget(self.plot_widget)
-        self.layout.addStretch()
 
     def toggle_panels(self):
         """Switch between filter and plot panels"""
@@ -50,13 +49,45 @@ class FilterWidget(QFrame):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Filter data"))
 
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        
+        self.scroll_content = QWidget()
+        self.scroll_main_layout = QVBoxLayout(self.scroll_content)
+        
+        # Filters Group Box
+        self.filter_group = QGroupBox("Filter Data")
         self.filter_controls_layout = QVBoxLayout()
-        layout.addLayout(self.filter_controls_layout)
+        self.filter_group.setLayout(self.filter_controls_layout)
+        self.scroll_main_layout.addWidget(self.filter_group)
 
         self.filter_placeholder = QLabel("Filters will appear here after loading data")
         self.filter_controls_layout.addWidget(self.filter_placeholder)
+        
+        # Overview Group Box
+        self.overview_group = QGroupBox("Column Viewer & Statistics")
+        self.overview_layout = QVBoxLayout()
+        self.overview_group.setLayout(self.overview_layout)
+        self.scroll_main_layout.addWidget(self.overview_group)
+        
+        # Column Stats UI
+        self.overview_layout.addWidget(QLabel("Column Statistics:"))
+        self.stats_combo = QComboBox()
+        self.stats_combo.currentTextChanged.connect(self.on_stats_column_changed)
+        self.overview_layout.addWidget(self.stats_combo)
+        
+        self.stats_label = QLabel("Select a column to see stats")
+        self.stats_label.setWordWrap(True)
+        self.stats_label.setStyleSheet("color: gray;")
+        self.overview_layout.addWidget(self.stats_label)
+
+        # Add the vertical stretch to push everything up
+        self.scroll_main_layout.addStretch()
+
+        self.scroll_area.setWidget(self.scroll_content)
+        layout.addWidget(self.scroll_area)
 
         apply_btn = QPushButton("Apply filters")
         apply_btn.clicked.connect(self.on_apply_filters)
@@ -66,14 +97,18 @@ class FilterWidget(QFrame):
         """Update filter controls based on data"""
         self.filter_placeholder.hide()
         for i in reversed(range(self.filter_controls_layout.count())):
-            widget = self.filter_controls_layout.itemAt(i).widget()
-            if widget:
-                widget.setParent(None)
+            item = self.filter_controls_layout.itemAt(i)
+            if item.widget():
+                item.widget().setParent(None)
+            else:
+                self.filter_controls_layout.removeItem(item)
 
         self.filter_controls = {}
 
         if data is None:
             return
+
+        self.current_data = data
 
         for column in data.columns:
             label = QLabel(column)
@@ -101,6 +136,17 @@ class FilterWidget(QFrame):
                 combo.addItems(map(str, unique_values))
                 self.filter_controls_layout.addWidget(combo)
                 self.filter_controls[column] = combo
+                
+        # Populate stats combobox
+        self.stats_combo.blockSignals(True)
+        self.stats_combo.clear()
+        self.stats_combo.addItems(data.columns)
+        self.stats_combo.blockSignals(False)
+        
+        if len(data.columns) > 0:
+            self.on_stats_column_changed(data.columns[0])
+            
+        # self.filter_controls_layout no longer gets stretch, as scroll_main_layout has it
 
 
     def on_apply_filters(self):
@@ -123,6 +169,35 @@ class FilterWidget(QFrame):
                 filters[column] = control.currentText()
 
         self.filters_applied.emit(filters)
+        
+    def on_stats_column_changed(self, column_name):
+        if not hasattr(self, 'current_data') or self.current_data is None or not column_name:
+            return
+            
+        if column_name not in self.current_data.columns:
+            return
+            
+        col_data = self.current_data[column_name]
+        dtype = str(col_data.dtype)
+        total_rows = len(col_data)
+        missing = col_data.isnull().sum()
+        missing_pct = (missing / total_rows) * 100 if total_rows > 0 else 0
+        unique_vals = col_data.nunique()
+        
+        stats_text = f"<b>Type:</b> {dtype}<br>"
+        stats_text += f"<b>Missing:</b> {missing} ({missing_pct:.1f}%)<br>"
+        stats_text += f"<b>Unique Values:</b> {unique_vals}<br>"
+        
+        if pd.api.types.is_numeric_dtype(col_data):
+            stats_text += f"<b>Mean:</b> {col_data.mean():.2f}<br>"
+            stats_text += f"<b>Min:</b> {col_data.min()}<br>"
+            stats_text += f"<b>Max:</b> {col_data.max()}<br>"
+        else:
+            if not col_data.mode().empty:
+                stats_text += f"<b>Mode:</b> {col_data.mode().iloc[0]}"
+                
+        self.stats_label.setText(stats_text)
+        self.stats_label.setStyleSheet("color: white;")
 
 
 class PlotWidget(QFrame):
@@ -138,9 +213,19 @@ class PlotWidget(QFrame):
         layout = QVBoxLayout(self)
 
         self.plot_type_combo = QComboBox()
-        self.plot_type_combo.addItems(['bar', 'line', 'scatter', 'box', 'violin', 'hist', 'heatmap'])
+        self.plot_type_combo.addItems(['bar', 'line', 'scatter', 'box', 'violin', 'hist', 'kde', 'heatmap', 'pie', 'area'])
         layout.addWidget(QLabel("Plot Type:"))
         layout.addWidget(self.plot_type_combo)
+
+        self.palette_combo = QComboBox()
+        self.palette_combo.addItems(['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'tab10', 'Set1', 'Set2', 'Set3', 'Dark2', 'husl', 'coolwarm'])
+        layout.addWidget(QLabel("Color Palette:"))
+        layout.addWidget(self.palette_combo)
+
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("Optional Title...")
+        layout.addWidget(QLabel("Plot Title:"))
+        layout.addWidget(self.title_input)
 
         self.x_axis_combo = QComboBox()
         layout.addWidget(QLabel("X Axis:"))
@@ -149,6 +234,11 @@ class PlotWidget(QFrame):
         self.y_axis_combo = QComboBox()
         layout.addWidget(QLabel("Y Axis:"))
         layout.addWidget(self.y_axis_combo)
+
+        self.aggregation_combo = QComboBox()
+        self.aggregation_combo.addItems(["None", "sum", "mean", "count", "median", "min", "max"])
+        layout.addWidget(QLabel("Aggregation (Y):"))
+        layout.addWidget(self.aggregation_combo)
 
         self.hue_combo = QComboBox()
         self.hue_combo.addItem("None")
@@ -177,11 +267,15 @@ class PlotWidget(QFrame):
 
     def on_plot_requested(self):
         """Emit signal with plot parameters"""
+        agg = self.aggregation_combo.currentText()
         plot_params = {
             'plttype': self.plot_type_combo.currentText(),
             'x': self.x_axis_combo.currentText() if self.x_axis_combo.currentText() != "None" else None,
             'y': self.y_axis_combo.currentText() if self.y_axis_combo.currentText() != "None" else None,
-            'hue': self.hue_combo.currentText() if self.hue_combo.currentText() != "None" else None
+            'hue': self.hue_combo.currentText() if self.hue_combo.currentText() != "None" else None,
+            'aggregation': agg if agg != "None" else None,
+            'palette': self.palette_combo.currentText(),
+            'title': self.title_input.text() if self.title_input.text() else None
         }
         self.plot_requested.emit(plot_params)
 
